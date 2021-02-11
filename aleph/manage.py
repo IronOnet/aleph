@@ -195,14 +195,10 @@ def xref(foreign_id):
 @click.argument("foreign_id")
 @click.option("-i", "--infile", type=click.File("r"), default="-")  # noqa
 @click.option(
-    "--safe/--unsafe",
-    default=True,
-    help="Allow references to archive hashes.",
+    "--safe/--unsafe", default=True, help="Allow references to archive hashes.",
 )
 @click.option(
-    "--mutable/--immutable",
-    default=False,
-    help="Mark entities mutable.",
+    "--mutable/--immutable", default=False, help="Mark entities mutable.",
 )
 def load_entities(foreign_id, infile, safe=False, mutable=False):
     """Load FtM entities from the specified iJSON file."""
@@ -262,26 +258,22 @@ def dump_entities(foreign_id, outfile):
     default=[],
     help="Filter schematas",
 )
-@click.option("--seed", type=int, default=None, help="Set the random seed")
 @click.option(
     "--sample-pct",
     type=float,
-    default=None,
+    default=0.1,
     help="Random sampling percent (value from 0-1)",
 )
 @click.option("--limit", type=int, default=None, help="Number of entities to return")
 @click.argument("outfile", type=click.File("w+"), default="-")
-def sample_entities(secret, properties, schematas, seed, sample_pct, limit, outfile):
+def sample_entities(secret, properties, schematas, sample_pct, limit, outfile):
     """Sample random entities"""
-    random.seed(seed)
     authz = Authz.from_role(Role.load_cli_user())
     collections = list(Collection.all_by_secret(secret, authz))
     random.shuffle(collections)
     iter_proxies_kwargs = {
         "authz": authz,
         "schemata": schematas or None,
-        "randomize": True,
-        "random_seed": seed,
     }
     n_entities = 0
     for collection in collections:
@@ -290,7 +282,10 @@ def sample_entities(secret, properties, schematas, seed, sample_pct, limit, outf
                 entity.properties.get(prop) for prop in properties
             ):
                 continue
-            if not sample_pct or random.random() < sample_pct:
+            ent_id, digest = collection.ns.parse(entity.id)
+            if digest is None:
+                digest = ent_id
+            if int(digest[:16], 16) < (sample_pct * (1 << 64)):
                 write_object(outfile, entity)
                 n_entities += 1
                 if limit and n_entities >= limit:
