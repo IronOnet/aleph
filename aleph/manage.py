@@ -30,6 +30,7 @@ from aleph.logic.xref import xref_collection
 from aleph.logic.export import retry_exports
 from aleph.logic.roles import create_user, update_roles, delete_role
 from aleph.logic.permissions import update_permission
+from aleph.logic.aggregator import get_aggregator
 
 log = logging.getLogger("aleph")
 
@@ -271,16 +272,15 @@ def sample_entities(secret, properties, schematas, sample_pct, limit, outfile):
     authz = Authz.from_role(Role.load_cli_user())
     collections = list(Collection.all_by_secret(secret, authz))
     random.shuffle(collections)
-    iter_proxies_kwargs = {
-        "authz": authz,
-        "schemata": schematas or None,
-    }
     n_entities = 0
     for collection in collections:
-        for entity in iter_proxies(collection_id=collection.id, **iter_proxies_kwargs):
+        aggregator = get_aggregator(collection)
+        for entity in aggregator.iterate(skip_errors=True):
             if properties and not any(
                 entity.properties.get(prop) for prop in properties
             ):
+                continue
+            if schematas and set(schematas).isdisjoint(entity.schema.names):
                 continue
             ent_id, digest = collection.ns.parse(entity.id)
             if digest is None:
